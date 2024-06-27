@@ -4,3 +4,5 @@ logs
 model_result
 VOCdevkit
 *.txt
+utils/__pycache__
+nets/__pycache__
