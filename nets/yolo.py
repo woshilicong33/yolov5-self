@@ -27,10 +27,10 @@ def yolo_body(input_shape, anchors_mask, num_classes, phi, weight_decay=5e-4):
     #---------------------------------------------------#
     feat1, feat2, feat3 = darknet_body(inputs, base_channels, base_depth, weight_decay)
 
-    P5          = DarknetConv2D_BN_ReLU_dw(int(base_channels * 8), (1, 1), weight_decay=weight_decay, name = 'conv_for_feat3')(feat3)  
+    P5          = DarknetConv2D_BN_ReLU_dw(int(base_channels * 4), (1, 1), weight_decay=weight_decay, name = 'conv_for_feat3')(feat3)  
     P5_upsample = UpSampling2D()(P5) 
     P5_upsample = Concatenate(axis = -1)([P5_upsample, feat2])
-    P5_upsample = C3_dw(P5_upsample, int(base_channels * 8), base_depth, shortcut = False, weight_decay=weight_decay, name = 'conv3_for_upsample1')
+    P5_upsample = C3_dw(P5_upsample, int(base_channels * 4), base_depth, shortcut = False, weight_decay=weight_decay, name = 'conv3_for_upsample1')
 
     P4          = DarknetConv2D_BN_ReLU_dw(int(base_channels * 4), (1, 1), weight_decay=weight_decay, name = 'conv_for_feat2')(P5_upsample)
     P4_upsample = UpSampling2D()(P4)
