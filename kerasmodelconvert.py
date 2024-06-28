@@ -32,7 +32,7 @@ if convert == "onnx":
 
     # model = tf.keras.models.load_model("./logs/best_epoch_weights.h5")
     spec = (tf.TensorSpec((1, 480, 480, 3), tf.float32, name="input_1"),)  # 输入签名参数，(None, 128, 128, 3)决定输入的size
-    output_path = "./best_epoch_weights.onnx"                                   # 输出路径
+    output_path = "./logs/best_epoch_weights.onnx"                                   # 输出路径
     
     # 转换并保存onnx模型，opset决定选用的算子集合
     model_proto, _ = tf2onnx.convert.from_keras(model_body, input_signature=spec, opset=13, output_path=output_path)

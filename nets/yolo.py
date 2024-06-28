@@ -18,7 +18,7 @@ def yolo_body(input_shape, anchors_mask, num_classes, phi, weight_decay=5e-4):
     base_channels       = int(wid_mul * 64)  # 64
     base_depth          = max(round(dep_mul * 3), 1)  # 3
 
-    inputs      = Input(input_shape)
+    inputs              = Input(input_shape)
     #---------------------------------------------------#   
     #   生成主干模型，获得三个有效特征层，他们的shape分别是：
     #   80, 80, 256
@@ -40,12 +40,12 @@ def yolo_body(input_shape, anchors_mask, num_classes, phi, weight_decay=5e-4):
     P3_downsample   = ZeroPadding2D(((1, 0),(1, 0)))(P3_out)
     P3_downsample   = DarknetConv2D_BN_ReLU_dw(int(base_channels * 2), (3, 3), strides = (2, 2), weight_decay=weight_decay, name = 'down_sample1')(P3_downsample)
     P3_downsample   = Concatenate(axis = -1)([P3_downsample, P4])
-    P4_out          = C3_dw(P3_downsample, int(base_channels * 4), base_depth, shortcut = False, weight_decay=weight_decay, name = 'conv3_for_downsample1') 
+    P4_out          = C3_dw(P3_downsample, int(base_channels * 2), base_depth, shortcut = False, weight_decay=weight_decay, name = 'conv3_for_downsample1') 
 
     P4_downsample   = ZeroPadding2D(((1, 0),(1, 0)))(P4_out)
-    P4_downsample   = DarknetConv2D_BN_ReLU_dw(int(base_channels * 8), (3, 3), strides = (2, 2), weight_decay=weight_decay, name = 'down_sample2')(P4_downsample)
+    P4_downsample   = DarknetConv2D_BN_ReLU_dw(int(base_channels * 4), (3, 3), strides = (2, 2), weight_decay=weight_decay, name = 'down_sample2')(P4_downsample)
     P4_downsample   = Concatenate(axis = -1)([P4_downsample, P5])
-    P5_out          = C3_dw(P4_downsample, int(base_channels * 16), base_depth, shortcut = False, weight_decay=weight_decay, name = 'conv3_for_downsample2')
+    P5_out          = C3_dw(P4_downsample, int(base_channels * 8), base_depth, shortcut = False, weight_decay=weight_decay, name = 'conv3_for_downsample2')
 
     out2 = DarknetConv2D_dw(len(anchors_mask[2]) * (5 + num_classes), (1, 1), strides = (1, 1), weight_decay=weight_decay, name = 'yolo_head_P3')(P3_out)
     out1 = DarknetConv2D_dw(len(anchors_mask[1]) * (5 + num_classes), (1, 1), strides = (1, 1), weight_decay=weight_decay, name = 'yolo_head_P4')(P4_out)
