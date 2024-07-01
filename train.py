@@ -483,12 +483,7 @@ if __name__ == "__main__":
                     workers             = num_workers,
                     callbacks           = callbacks
                 )
-                converter = tf.lite.TFLiteConverter.from_keras_model(model)
-                tflite_model = converter.convert()
-                print("here")
-                # Save the model.
-                with open('model.tflite', 'wb') as f:
-                    f.write(tflite_model)   
+
             #---------------------------------------#
             #   如果模型有冻结学习部分
             #   则解冻，并设置参数

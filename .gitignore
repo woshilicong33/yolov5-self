@@ -6,3 +6,4 @@ VOCdevkit
 *.txt
 utils/__pycache__
 nets/__pycache__
+deploy/build
