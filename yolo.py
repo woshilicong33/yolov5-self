@@ -26,13 +26,13 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "model_path"        : 'logs/best_epoch_weights.h5',
-        "classes_path"      : 'model_data/xmclasses.txt',
+        "model_path"        : '../best_epoch_weights.h5',
+        "classes_path"      : '../model_data/xmclasses.txt',
         #---------------------------------------------------------------------#
         #   anchors_path代表先验框对应的txt文件，一般不修改。
         #   anchors_mask用于帮助代码找到对应的先验框，一般不修改。
         #---------------------------------------------------------------------#
-        "anchors_path"      : 'model_data/yolo_anchors.txt',
+        "anchors_path"      : '../model_data/yolo_anchors.txt',
         "anchors_mask"      : [[6, 7, 8], [3, 4, 5], [0, 1, 2]],
         #---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
@@ -101,7 +101,7 @@ class YOLO(object):
         model_path = os.path.expanduser(self.model_path)
         assert model_path.endswith('.h5'), 'Keras model or weights must be a .h5 file.'
         
-        self.model = yolo_body([None, None, 3], self.anchors_mask, self.num_classes, self.phi)
+        self.model = yolo_body([480, 480, 3], self.anchors_mask, self.num_classes, self.phi)
         self.model.load_weights(self.model_path)
         print('{} model, anchors, and classes loaded.'.format(model_path))
         #---------------------------------------------------------#
@@ -296,7 +296,11 @@ class YOLO(object):
         plt.savefig(heatmap_save_path, dpi=200, bbox_inches='tight', pad_inches = -0.1)
         print("Save to the " + heatmap_save_path)
         plt.show()
-        
+
+    def conver_to_tflite(self,model_path):
+        converter = tf.lite.TFLiteConverter.from_keras_model_file('../best_epoch_weights.h5')
+        tflite_model = converter.convert()
+        open(model_path, 'wb').write(tflite_model)
     def convert_to_onnx(self, simplify, model_path):
         import onnx
         import tf2onnx
@@ -319,7 +323,13 @@ class YOLO(object):
             onnx.save(model_onnx, model_path)
 
         print('Onnx model save as {}'.format(model_path))
-        
+    def convert_to_pb(self, model_path):
+        from keras import backend as K
+        from keras.models import load_model
+        h5_model = load_model('../best_epoch_weights.h5',{self.anchors})
+        # tf.keras.models.save_model(self.model,model_path) # 默认生成 .pb 格式模型，也可以通过save_format 设置 .h5 格式
+        # print('模型已保存')
+
     #---------------------------------------------------#
     #   检测图片
     #---------------------------------------------------#

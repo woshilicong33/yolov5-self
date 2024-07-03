@@ -33,6 +33,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 3、训练好的权值文件保存在logs文件夹中，每个训练世代（Epoch）包含若干训练步长（Step），每个训练步长（Step）进行一次梯度下降。
    如果只是训练了几个Step是不会保存的，Epoch和Step的概念要捋清楚一下。
 '''
+def representative_data_gen():
+    for image in train_images[0:100,:,:]:
+        yield[image.reshape(-1,480,480,3).astype("float32")]
+
 if __name__ == "__main__":
     #----------------------------------------------------#
     #   是否使用eager模式训练
