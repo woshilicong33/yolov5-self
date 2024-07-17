@@ -1,15 +1,15 @@
 from functools import wraps
 
 import tensorflow as tf
-from tensorflow.keras import backend as K
-from tensorflow.keras.initializers import RandomNormal
-from tensorflow.keras.layers import (Add, BatchNormalization, Concatenate,
+from keras import backend as K
+from keras.initializers import RandomNormal
+from keras.layers import (Add, BatchNormalization, Concatenate,
                                      Conv2D, Layer, MaxPooling2D,
                                      ZeroPadding2D,SeparableConv2D)
-from tensorflow.keras.regularizers import l2
+from keras.regularizers import L2
 from utils.utils import compose
 
-from tensorflow.keras.layers import LeakyReLU
+from keras.layers import LeakyReLU
 
 class SiLU(Layer):
     def __init__(self, **kwargs):
@@ -48,7 +48,7 @@ class Focus(Layer):
 #------------------------------------------------------#
 @wraps(Conv2D)
 def DarknetConv2D(*args, **kwargs):
-    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : l2(kwargs.get('weight_decay', 5e-4))}
+    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : L2(kwargs.get('weight_decay', 5e-4))}
     darknet_conv_kwargs['padding'] = 'valid' if kwargs.get('strides')==(2, 2) else 'same'   
     try:
         del kwargs['weight_decay']
@@ -58,7 +58,7 @@ def DarknetConv2D(*args, **kwargs):
     return Conv2D(*args, **darknet_conv_kwargs)
 @wraps(SeparableConv2D)   
 def DarknetConv2D_dw(*args, **kwargs):
-    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : l2(kwargs.get('weight_decay', 5e-4))}
+    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : L2(kwargs.get('weight_decay', 5e-4))}
     darknet_conv_kwargs['padding'] = 'valid' if kwargs.get('strides')==(2, 2) else 'same'   
     try:
         del kwargs['weight_decay']

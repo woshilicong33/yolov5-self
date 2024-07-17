@@ -11,8 +11,9 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow import keras
-from tensorflow.keras.layers import Input, Lambda
-from tensorflow.keras.models import Model
+from keras.layers import Input, Lambda
+from keras.models import Model
+from keras.callbacks import Callback
 from PIL import Image
 from tqdm import tqdm
 from .utils import cvtColor, preprocess_input, resize_image
@@ -20,7 +21,7 @@ from .utils_bbox import DecodeBox
 from .utils_map import get_coco_map, get_map
 
 
-class LossHistory(keras.callbacks.Callback):
+class LossHistory(Callback):
     def __init__(self, log_dir):
         self.log_dir    = log_dir
         self.losses     = []
@@ -71,7 +72,7 @@ class LossHistory(keras.callbacks.Callback):
         plt.cla()
         plt.close("all")
 
-class EvalCallback(keras.callbacks.Callback):
+class EvalCallback(Callback):
     def __init__(self, model_body, input_shape, anchors, anchors_mask, class_names, num_classes, val_lines, log_dir,\
             map_out_path=".temp_map_out", max_boxes=100, confidence=0.05, nms_iou=0.5, letterbox_image=True, MINOVERLAP=0.5, eval_flag=True, period=1):
         super(EvalCallback, self).__init__()
@@ -234,7 +235,7 @@ class EvalCallback(keras.callbacks.Callback):
             print("Get map done.")
             shutil.rmtree(self.map_out_path)
 
-class ModelCheckpoint(keras.callbacks.Callback):
+class ModelCheckpoint(Callback):
     def __init__(self, filepath, monitor='val_loss', verbose=0,
                  save_best_only=False, save_weights_only=False,
                  mode='auto', period=1):

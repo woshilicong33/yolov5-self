@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from tensorflow.keras import backend as K
+from keras import backend as K
 
 
 #---------------------------------------------------#
@@ -55,24 +55,37 @@ def get_anchors_and_decode(feats, anchors, num_classes, input_shape, calc_loss=F
     anchors_tensor = K.tile(anchors_tensor, [grid_shape[0], grid_shape[1], 1, 1])
 
     #---------------------------------------------------#
-    #   将预测结果调整成(batch_size, 20, 20, 3, 85)
+    #   将预测结果调整成(batch_size, 20, 20, 3, 8)
     #   85可拆分成4 + 1 + 80
     #   4代表的是中心宽高的调整参数
     #   1代表的是框的置信度
     #   80代表的是种类的置信度
     #---------------------------------------------------#
     feats           = K.reshape(feats, [-1, grid_shape[0], grid_shape[1], num_anchors, num_classes + 5])
+    # f = open("testout.txt",'a')
+    np.set_printoptions(threshold=np.inf)
+    
+
+    # for i in range(60):
+    #     for j in range(60):
+
+    #         print(feats[0,i,j,1,4])
+    #         print(1)
+    #         f.write(' ')
+    #     f.write('\n')
+    # f.write('\n')
     #------------------------------------------#
     #   对先验框进行解码，并进行归一化
     #------------------------------------------#
-    box_xy          = (K.sigmoid(feats[..., :2]) * 2 - 0.5 + grid) / K.cast(grid_shape[..., ::-1], K.dtype(feats))
-    box_wh          = (K.sigmoid(feats[..., 2:4]) * 2) ** 2 * anchors_tensor / K.cast(input_shape[::-1], K.dtype(feats))
+    box_xy          = (K.sigmoid(feats[..., :2]) * 2 - 0.5 + grid) / K.cast([grid_shape[0], grid_shape[1]], K.dtype(feats))
+    box_wh          = (K.sigmoid(feats[..., 2:4]) * 2) ** 2 * anchors_tensor / K.cast([480,480], K.dtype(feats))
+
     #------------------------------------------#
     #   获得预测框的置信度
     #------------------------------------------#
     box_confidence  = K.sigmoid(feats[..., 4:5])
     box_class_probs = K.sigmoid(feats[..., 5:])
-    
+ 
     #---------------------------------------------------------------------#
     #   在计算loss的时候返回grid, feats, box_xy, box_wh
     #   在预测的时候返回box_xy, box_wh, box_confidence, box_class_probs
@@ -97,10 +110,10 @@ def DecodeBox(outputs,
             max_boxes       = 100,
             confidence      = 0.5,
             nms_iou         = 0.3,
+            convert_model   = False,
             letterbox_image = True):
-    
-    image_shape = K.reshape(outputs[-1],[-1])
 
+    image_shape = K.reshape(outputs[-1],[-1])
     box_xy = []
     box_wh = []
     box_confidence  = []
@@ -117,13 +130,15 @@ def DecodeBox(outputs,
     box_confidence  = K.concatenate(box_confidence, axis = 0)
     box_class_probs = K.concatenate(box_class_probs, axis = 0)
     
+    if convert_model:
+        return box_xy,box_wh,box_confidence,box_class_probs
+
     #------------------------------------------------------------------------------------------------------------#
     #   在图像传入网络预测前会进行letterbox_image给图像周围添加灰条，因此生成的box_xy, box_wh是相对于有灰条的图像的
     #   我们需要对其进行修改，去除灰条的部分。 将box_xy、和box_wh调节成y_min,y_max,xmin,xmax
     #   如果没有使用letterbox_image也需要将归一化后的box_xy, box_wh调整成相对于原图大小的
     #------------------------------------------------------------------------------------------------------------#
     boxes       = yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
-
     box_scores  = box_confidence * box_class_probs
 
     #-----------------------------------------------------------#
@@ -141,18 +156,18 @@ def DecodeBox(outputs,
         class_boxes      = tf.boolean_mask(boxes, mask[:, c])
         class_box_scores = tf.boolean_mask(box_scores[:, c], mask[:, c])
 
-        #-----------------------------------------------------------#
-        #   非极大抑制
-        #   保留一定区域内得分最大的框
-        #-----------------------------------------------------------#
-        nms_index = tf.image.non_max_suppression(class_boxes, class_box_scores, max_boxes_tensor, iou_threshold=nms_iou)
+        # #-----------------------------------------------------------#
+        # #   非极大抑制
+        # #   保留一定区域内得分最大的框
+        # #-----------------------------------------------------------#
+        # nms_index = tf.image.non_max_suppression(class_boxes, class_box_scores, max_boxes_tensor, iou_threshold=nms_iou)
 
-        #-----------------------------------------------------------#
-        #   获取非极大抑制后的结果
-        #   下列三个分别是：框的位置，得分与种类
-        #-----------------------------------------------------------#
-        class_boxes         = K.gather(class_boxes, nms_index)
-        class_box_scores    = K.gather(class_box_scores, nms_index)
+        # #-----------------------------------------------------------#
+        # #   获取非极大抑制后的结果
+        # #   下列三个分别是：框的位置，得分与种类
+        # #-----------------------------------------------------------#
+        # class_boxes         = K.gather(class_boxes, nms_index)
+        # class_box_scores    = K.gather(class_box_scores, nms_index)
         classes             = K.ones_like(class_box_scores, 'int32') * c
 
         boxes_out.append(class_boxes)
@@ -467,8 +482,7 @@ if __name__ == "__main__":
 
         anchor_left = grid_x - anchors_tensor/2 
         anchor_top  = grid_y - anchors_tensor/2 
-        print(np.shape(anchors_tensor))
-        print(np.shape(box_xy))
+
         rect1 = plt.Rectangle([anchor_left[5,5,0,0],anchor_top[5,5,0,1]],anchors_tensor[0,0,0,0],anchors_tensor[0,0,0,1],color="r",fill=False)
         rect2 = plt.Rectangle([anchor_left[5,5,1,0],anchor_top[5,5,1,1]],anchors_tensor[0,0,1,0],anchors_tensor[0,0,1,1],color="r",fill=False)
         rect3 = plt.Rectangle([anchor_left[5,5,2,0],anchor_top[5,5,2,1]],anchors_tensor[0,0,2,0],anchors_tensor[0,0,2,1],color="r",fill=False)
@@ -498,6 +512,6 @@ if __name__ == "__main__":
 
         plt.show()
         #
-    feat = np.random.normal(-0.5,0.5, [4, 20, 20, 75])
+    feat = np.random.normal(-0.5,0.5, [1, 60, 60, 24])
     anchors = [[116, 90], [156, 198], [373, 326]]
-    get_anchors_and_decode(feat, anchors, 20)
+    get_anchors_and_decode(feat, anchors, 3)

@@ -2,7 +2,7 @@ import math
 from functools import partial
 
 import tensorflow as tf
-from tensorflow.keras import backend as K
+from keras import backend as K
 from utils.utils_bbox import get_anchors_and_decode
 
 

@@ -14,7 +14,7 @@ from yolo import YOLO, YOLO_ONNX
 gpus = tf.config.experimental.list_physical_devices(device_type='GPU')
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
-    
+tf.config.run_functions_eagerly(True)    
 if __name__ == "__main__":
     #----------------------------------------------------------------------------------------------------------#
     #   mode用于指定测试的模式：
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     #   'export_onnx'       表示将模型导出为onnx，需要pytorch1.7.1以上。
     #   'predict_onnx'      表示利用导出的onnx模型进行预测，相关参数的修改在yolo.py_377行左右处的YOLO_ONNX
     #----------------------------------------------------------------------------------------------------------#
-    mode = "dir_predict"
+    mode = "predict"
     #-------------------------------------------------------------------------#
     #   crop                指定了是否在单张图片预测后对目标进行截取
     #   count               指定了是否进行目标的计数
@@ -90,6 +90,8 @@ if __name__ == "__main__":
         4、如果想要在预测图上写额外的字，比如检测到的特定目标的数量，可以进入yolo.detect_image函数，在绘图部分对predicted_class进行判断，
         比如判断if predicted_class == 'car': 即可判断当前目标是否为车，然后记录数量即可。利用draw.text即可写字。
         '''
+# b'leaf 0.77' 291 409 364 487   327.5   425
+# b'leaf 0.76' 240 545 262 588
         while True:
             img = input('Input image filename:')
             try:
@@ -100,6 +102,7 @@ if __name__ == "__main__":
             else:
                 r_image = yolo.detect_image(image, crop = crop, count=count)
                 r_image.show()
+                print("predict")
 
     elif mode == "video":
         capture = cv2.VideoCapture(video_path)

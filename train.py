@@ -3,10 +3,10 @@ import os
 from functools import partial
 
 import tensorflow as tf
-import tensorflow.keras.backend as K
-from tensorflow.keras.callbacks import (EarlyStopping, LearningRateScheduler,
+from keras import backend as K
+from keras.callbacks import (EarlyStopping, LearningRateScheduler,
                                         TensorBoard)
-from tensorflow.keras.optimizers import SGD, Adam
+from keras.optimizers import SGD, Adam
 
 from nets.yolo import get_train_model, yolo_body
 from nets.yolo_training import get_lr_scheduler
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     #               默认为第一张卡、双卡为[0, 1]、三卡为[0, 1, 2]
     #               在使用多GPU时，每个卡上的batch为总batch除以卡的数量。
     #---------------------------------------------------------------------#
-    train_gpu       = [0,]
+    train_gpu       = [1,]
     #---------------------------------------------------------------------#
     #   classes_path    指向model_data下的txt，与自己训练的数据集相关 
     #                   训练前一定要修改classes_path，使其对应自己的数据集
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
     UnFreeze_Epoch      = 1000
-    Unfreeze_batch_size = 20
+    Unfreeze_batch_size = 64
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -224,8 +224,8 @@ if __name__ == "__main__":
     #   train_annotation_path   训练图片路径和标签
     #   val_annotation_path     验证图片路径和标签
     #------------------------------------------------------#
-    train_annotation_path   = 'dataset/datamix_train.txt'
-    val_annotation_path     = 'dataset/datamix_test.txt'
+    train_annotation_path   = '../dataset/datamix_train.txt'
+    val_annotation_path     = '../dataset/datamix_test.txt'
 
     #------------------------------------------------------#
     #   设置用到的显卡
@@ -267,6 +267,8 @@ if __name__ == "__main__":
             if model_path != '':
                 print('Load weights {}.'.format(model_path))
                 model_body.load_weights(model_path, by_name=True, skip_mismatch=True)
+                # model.save("test.h5",overwrite=True)
+                # exit()
             if not eager:
                 model = get_train_model(model_body, input_shape, num_classes, anchors, anchors_mask, label_smoothing)
     else:
@@ -280,7 +282,7 @@ if __name__ == "__main__":
             #------------------------------------------------------#
             print('Load weights {}.'.format(model_path))
             model_body.load_weights(model_path, by_name=True, skip_mismatch=True)
-        
+            
         if not eager:
             model = get_train_model(model_body, input_shape, num_classes, anchors, anchors_mask, label_smoothing)
             

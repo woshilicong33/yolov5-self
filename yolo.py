@@ -26,13 +26,13 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "model_path"        : '../best_epoch_weights.h5',
-        "classes_path"      : '../model_data/xmclasses.txt',
+        "model_path"        : './best_epoch_weights.h5',
+        "classes_path"      : './model_data/xmclasses.txt',
         #---------------------------------------------------------------------#
         #   anchors_path代表先验框对应的txt文件，一般不修改。
         #   anchors_mask用于帮助代码找到对应的先验框，一般不修改。
         #---------------------------------------------------------------------#
-        "anchors_path"      : '../model_data/yolo_anchors.txt',
+        "anchors_path"      : './model_data/yolo_anchors.txt',
         "anchors_mask"      : [[6, 7, 8], [3, 4, 5], [0, 1, 2]],
         #---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
@@ -59,6 +59,7 @@ class YOLO(object):
         #   在多次测试后，发现关闭letterbox_image直接resize的效果更好
         #---------------------------------------------------------------------#
         "letterbox_image"   : True,
+        "convert_model"     : False,
     }
 
     @classmethod
@@ -93,7 +94,8 @@ class YOLO(object):
         self.generate()
 
         show_config(**self._defaults)
-
+        # print(self.conver_model)
+        # exit()
     #---------------------------------------------------#
     #   载入模型
     #---------------------------------------------------#
@@ -109,7 +111,11 @@ class YOLO(object):
         #   后处理的内容包括，解码、非极大抑制、门限筛选等
         #---------------------------------------------------------#
         self.input_image_shape = Input([2,],batch_size=1)
-        inputs  = [*self.model.output, self.input_image_shape]
+        if self.convert_model:
+            inputs  = [*self.model.output]#, self.input_image_shape]
+        else:
+            inputs  = [*self.model.output, self.input_image_shape]
+        print("here:",self.convert_model)
         outputs = Lambda(
             DecodeBox, 
             output_shape = (1,), 
@@ -122,10 +128,14 @@ class YOLO(object):
                 'confidence'        : self.confidence, 
                 'nms_iou'           : self.nms_iou, 
                 'max_boxes'         : self.max_boxes, 
-                'letterbox_image'   : self.letterbox_image
+                'letterbox_image'   : self.letterbox_image,
+                'convert_model'     : self.convert_model
              }
         )(inputs)
-        self.yolo_model = Model([self.model.input, self.input_image_shape], outputs)
+        if self.convert_model:
+            self.yolo_model = Model(self.model.input,outputs)#, ], outputs)
+        else: 
+            self.yolo_model = Model([self.model.input,self.input_image_shape],outputs)#, ], outputs)
 
     @tf.function
     def get_pred(self, image_data, input_image_shape):
@@ -135,6 +145,7 @@ class YOLO(object):
     #   检测图片
     #---------------------------------------------------#
     def detect_image(self, image, crop = False, count = False):
+
         #---------------------------------------------------------#
         #   在这里将图像转换成RGB图像，防止灰度图在预测时报错。
         #   代码仅仅支持RGB图像的预测，所有其它类型的图像都会转化成RGB
@@ -154,6 +165,7 @@ class YOLO(object):
         #   将图像输入网络当中进行预测！
         #---------------------------------------------------------#
         input_image_shape = np.expand_dims(np.array([image.size[1], image.size[0]], dtype='float32'), 0)
+
         out_boxes, out_scores, out_classes = self.get_pred(image_data, input_image_shape) 
 
         print('Found {} boxes for {}'.format(len(out_boxes), 'img'))
@@ -208,12 +220,12 @@ class YOLO(object):
 
             label = '{} {:.2f}'.format(predicted_class, score)
             draw = ImageDraw.Draw(image)
-            label_size = draw.textsize(label, font)
+            label_size = draw.textlength(label, font)
             label = label.encode('utf-8')
             print(label, top, left, bottom, right)
             
-            if top - label_size[1] >= 0:
-                text_origin = np.array([left, top - label_size[1]])
+            if top - label_size >= 0:
+                text_origin = np.array([left, top - label_size])
             else:
                 text_origin = np.array([left, top + 1])
 
@@ -222,7 +234,7 @@ class YOLO(object):
             draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
             draw.text(text_origin, str(label,'UTF-8'), fill=(0, 0, 0), font=font)
             del draw
-
+        image.save("./result.jpg")
         return image
 
     def get_FPS(self, image, test_interval):
@@ -298,14 +310,15 @@ class YOLO(object):
         plt.show()
 
     def conver_to_tflite(self,model_path):
-        converter = tf.lite.TFLiteConverter.from_keras_model_file('../best_epoch_weights.h5')
+        converter = tf.lite.TFLiteConverter.from_keras_model_file('../logs/ep004-loss0.116-val_loss0.074.h5')
         tflite_model = converter.convert()
         open(model_path, 'wb').write(tflite_model)
     def convert_to_onnx(self, simplify, model_path):
         import onnx
         import tf2onnx
-        spec = (tf.TensorSpec((None, *self.input_shape, 3), tf.float32, name="input"),)
-        tf2onnx.convert.from_keras(self.model, input_signature=spec, opset=13, output_path=model_path)
+        input_image_shape = np.expand_dims(np.array([480, 480], dtype='float32'), 0)
+        spec = [tf.TensorSpec((None, 480,480, 3), tf.float32, name="input")]
+        tf2onnx.convert.from_keras(self.yolo_model, input_signature=spec, opset=13, output_path=model_path)
 
         # Checks
         model_onnx = onnx.load(model_path)  # load onnx model
@@ -380,7 +393,7 @@ class YOLO_ONNX(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的onnx_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "onnx_path"         : 'logs/best_epoch_weights.onnx',
+        "onnx_path"         : './best_epoch_weights.onnx',
         "classes_path"      : 'model_data/xmclasses.txt',
         #---------------------------------------------------------------------#
         #   anchors_path代表先验框对应的txt文件，一般不修改。
@@ -545,7 +558,8 @@ class YOLO_ONNX(object):
         #   h, w, 3 => 3, h, w => 1, 3, h, w
         #---------------------------------------------------------#
         image_data  = np.expand_dims(preprocess_input(np.array(image_data, dtype='float32')), 0)
- 
+
+        # exit()
         input_feed  = self.get_input_feed(image_data)
         outputs     = self.onnx_session.run(output_names=self.output_name, input_feed=input_feed)
 
@@ -604,5 +618,5 @@ class YOLO_ONNX(object):
             draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
             draw.text(text_origin, str(label,'UTF-8'), fill=(0, 0, 0), font=font)
             del draw
-
+        image.save("./result.jpg")
         return image

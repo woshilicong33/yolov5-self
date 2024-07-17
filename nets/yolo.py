@@ -1,7 +1,7 @@
-from tensorflow.keras.layers import (Concatenate, Input, Lambda, UpSampling2D,
+from keras.layers import (Concatenate, Input, Lambda, UpSampling2D,
                                      ZeroPadding2D)
-from tensorflow.keras.models import Model
-
+from keras.models import Model
+from keras import backend as K
 from nets.CSPdarknet import (C3,C3_dw, DarknetConv2D, DarknetConv2D_BN_SiLU,DarknetConv2D_BN_ReLU_dw,
                              darknet_body,DarknetConv2D_dw)
 from nets.yolo_training import yolo_loss
@@ -50,6 +50,13 @@ def yolo_body(input_shape, anchors_mask, num_classes, phi, weight_decay=5e-4):
     out2 = DarknetConv2D_dw(len(anchors_mask[2]) * (5 + num_classes), (1, 1), strides = (1, 1), weight_decay=weight_decay, name = 'yolo_head_P3')(P3_out)
     out1 = DarknetConv2D_dw(len(anchors_mask[1]) * (5 + num_classes), (1, 1), strides = (1, 1), weight_decay=weight_decay, name = 'yolo_head_P4')(P4_out)
     out0 = DarknetConv2D_dw(len(anchors_mask[0]) * (5 + num_classes), (1, 1), strides = (1, 1), weight_decay=weight_decay, name = 'yolo_head_P5')(P5_out)
+
+    # out4 = DarknetConv2D_dw(32, (1, 1), strides = (1, 1), weight_decay=weight_decay, name = 'test')(out2)
+    # out2_reshape = K.reshape(out2, [1, 10800, 8])
+    # out1_reshape = K.reshape(out1, [1, 2700, 8])
+    # out0_reshape = K.reshape(out0, [1, 675, 8])
+    # # boxes_out, scores_out, classes_out = DecodeBox(out2)
+    # # testout   = Concatenate(axis = 1)([out2_reshape, out1_reshape,out0_reshape])
     return Model(inputs, [out0, out1, out2])
 
 def get_train_model(model_body, input_shape, num_classes, anchors, anchors_mask, label_smoothing):

@@ -4,12 +4,12 @@ from random import sample, shuffle
 import cv2
 import numpy as np
 from PIL import Image
-from tensorflow import keras
 
+from keras.utils import Sequence
 from utils.utils import cvtColor, preprocess_input
 
 
-class YoloDatasets(keras.utils.Sequence):
+class YoloDatasets(Sequence):
     def __init__(self, annotation_lines, input_shape, anchors, batch_size, num_classes, anchors_mask, epoch_now, epoch_length, \
                         mosaic, mixup, mosaic_prob, mixup_prob, train, special_aug_ratio = 0.7):
         self.annotation_lines   = annotation_lines

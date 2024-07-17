@@ -1,144 +1,203 @@
-#环境为tensorflow2.3
-import tensorflow as tf
-from tensorflow.keras import datasets, layers, models
-import matplotlib.pyplot as plt
 import numpy as np
- 
-# 导入数据
-(x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-# 观察数据
-print (x_train.shape)
-plt.imshow(x_train[1000])
-print (y_train[1000])
- 
-train_images=x_train/255.0
- 
-#(train_images, train_labels), (test_images, test_labels) = datasets.cifar10.load_data()
-# 归一化
-x_train, x_test = x_train / 255.0, x_test / 255.0
- 
-class_names = ['0', '1', '2', '3', '4','5', '6', '7', '8', '9']
- 
-plt.imshow(x_train[2000])
- 
- 
-x_train = x_train.reshape((x_train.shape[0],28,28,1)).astype('float32') 
-x_test = x_test.reshape((x_test.shape[0],28,28,1)).astype('float32') #-1代表那个地方由其余几个值算来的
-x_train = x_train/255
-x_test = x_test/255
-x_train = np.pad(x_train, ((0,0),(2,2),(2,2),(0,0)), 'constant')
-x_test = np.pad(x_test, ((0,0),(2,2),(2,2),(0,0)), 'constant')
-print (x_train.shape)
- 
-########################################################################################
-#模型建立
- 
-#序贯模型（Sequential):单输入单输出
-model = tf.keras.Sequential()
- 
-from tensorflow.keras.layers import Conv2D
-from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import Flatten
-from tensorflow.keras.layers import Dense
-from tensorflow.keras.layers import InputLayer, Dropout, Conv1D, Flatten
-import os
+np.set_printoptions(threshold=np.inf)
+def get_near_points(x, y, i, j):
+    sub_x = x - i
+    sub_y = y - j
+    if sub_x > 0.5 and sub_y > 0.5:
+        return [[0, 0], [1, 0], [0, 1]]
+    elif sub_x < 0.5 and sub_y > 0.5:
+        return [[0, 0], [-1, 0], [0, 1]]
+    elif sub_x < 0.5 and sub_y < 0.5:
+        return [[0, 0], [-1, 0], [0, -1]]
+    else:
+        return [[0, 0], [1, 0], [0, -1]]
+def preprocess_true_boxes(true_boxes, input_shape, anchors, num_classes):
+    assert (true_boxes[..., 4]<num_classes).all(), 'class id must be less than num_classes'
+    #-----------------------------------------------------------#
+    #   获得框的坐标和图片的大小
+    #-----------------------------------------------------------#
+    true_boxes  = np.array(true_boxes, dtype='float32')
+    input_shape = np.array(input_shape, dtype='int32')
+    print("true_boxes",true_boxes)
+    print("true_boxes.shape",true_boxes.shape)
+    print("input_shape",input_shape)
+    anchors_mask    = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
+    #-----------------------------------------------------------#
+    #   一共有三个特征层数
+    #-----------------------------------------------------------#
+    num_layers  = len(anchors_mask)
+    print("num_layers",num_layers)
+    true_boxes = np.expand_dims(true_boxes, 0)
+    #-----------------------------------------------------------#
+    #   m为图片数量，grid_shapes为网格的shape
+    #-----------------------------------------------------------#
+    m           = true_boxes.shape[0]
+    print("m",m)
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 这一句根据需要添加，作用是指定GPU
+    grid_shapes = [input_shape // {0:32, 1:16, 2:8}[l] for l in range(num_layers)]
+    print("grid_shapes",grid_shapes)
 
-config = tf.compat.v1.ConfigProto()
-config.gpu_options.allow_growth = True  
-tf.compat.v1.keras.backend.set_session(tf.compat.v1.Session(config=config))
+    #-----------------------------------------------------------#
+    #   y_true的格式为(m,13,13,3,85)(m,26,26,3,85)(m,52,52,3,85)
+    #-----------------------------------------------------------#
+    print("y_true:",grid_shapes[0])
 
-#我加的这一层
-model.add(InputLayer(input_shape=(32,32,1), name='x_input'))
- 
-#Layer 1
-#Conv Layer 1
-model.add(Conv2D(filters = 6, kernel_size = 5, strides = 1, activation = 'relu', input_shape = (32,32,1)))
-#Pooling layer 1
-model.add(MaxPooling2D(pool_size = 2, strides = 2))
- 
-#Layer 2
-#Conv Layer 2
-model.add(Conv2D(filters = 16, kernel_size = 5,strides = 1,activation = 'relu',input_shape = (14,14,6)))
-#Pooling Layer 2
-model.add(MaxPooling2D(pool_size = 2, strides = 2))
-#Flatten
-model.add(Flatten())
- 
-#Layer 3
-#Fully connected layer 1
-model.add(Dense(units = 120, activation = 'relu'))
- 
-#Layer 4
-#Fully connected layer 2
-model.add(Dense(units = 42, activation = 'relu'))######
- 
-#Layer 5
-#Output Layer
-model.add(Dense(units = 10, activation = 'softmax'))
-model.compile(optimizer = 'adam',  loss=tf.keras.losses.SparseCategoricalCrossentropy(), metrics = ['accuracy'])
- 
-model.summary()
-#########################################################################################
- 
-model.compile(optimizer='adam',
-              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
-              metrics=['accuracy'])
- 
-history = model.fit(x_train, y_train, epochs=1,batch_size=32,
-                    validation_data=(x_test, y_test))
- 
-history.history.keys()#可视化
-#准确率训练数据可视化
-plt.plot(history.epoch, history.history.get('accuracy'),label='accuracy')
-plt.plot(history.epoch, history.history.get('val_accuracy'),label='val_accuracy')
-plt.legend()
- 
-model.save('./LeNet_5.h5')#keras保存模型，名字可以任取，但要由.h5后缀,可以更改为自己的路径
-#测试模型
-model.evaluate(x_test, y_test)
- 
-# 模型保存
-save_path = "./pbpath"#pb模型保存路径
-model.save(save_path)
+    y_true = [np.zeros((m, grid_shapes[l], grid_shapes[l], len(anchors_mask[l]), 5 + num_classes),
+                dtype='float32') for l in range(num_layers)]
+    print("y_true:",y_true[0].shape)
+    print("y_true:",y_true[1].shape)
+    print("y_true:",y_true[2].shape)
 
-train_images = x_train
-train_images.shape[2]
-from nets.yolo import  yolo_body
+    #-----------------------------------------------------#
+    #   anchors_best_ratio
+    #-----------------------------------------------------#
+    box_best_ratios = [np.zeros((m, grid_shapes[l], grid_shapes[l], len(anchors_mask[l])),
+                dtype='float32') for l in range(num_layers)]
 
-anchors_path    = 'model_data/yolo_anchors.txt'
-anchors_mask    = [[6, 7, 8], [3, 4, 5], [0, 1, 2]]
-classes = 3
-model_body  = yolo_body((480, 480, 3), anchors_mask, classes,'s',5e-4)
-model_body.load_weights("./best_epoch_weights.h5") 
-#int8真的量化成功了！！！！
-#还可以部署到openMV上！！！
-def representative_data_gen():
-    for image in train_images[0:100,:,:]:
-        yield[image.reshape(-1,480,480,3).astype("float32")]
- 
-converter = tf.lite.TFLiteConverter.from_keras_model(model_body)
-converter.optimizations = [tf.lite.Optimize.DEFAULT]
-converter.representative_dataset = representative_data_gen
- 
-#--------新增加的代码--------------------------------------------------------
-# 确保量化操作不支持时抛出异常
-converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
-# 设置输入输出张量为uint8格式
-converter.inference_input_type = tf.int8 #or unit8
-converter.inference_output_type = tf.int8 #or unit8
-#----------------------------------------------------------------------------
- 
-tflite_model_quant = converter.convert()
-#保存转换后的模型
-FullInt_name = "int8.tflite"
-open(FullInt_name, "wb").write(tflite_model_quant)
- 
-#查看输入输出类型
-interpreter = tf.lite.Interpreter(model_content=tflite_model_quant)
-input_type = interpreter.get_input_details()[0]['dtype']
-print('input: ', input_type)
-output_type = interpreter.get_output_details()[0]['dtype']
-print('output: ', output_type)
+    #-----------------------------------------------------------#
+    #   通过计算获得真实框的中心和宽高
+    #   中心点(m,n,2) 宽高(m,n,2)
+    #-----------------------------------------------------------#
+    boxes_xy = (true_boxes[..., 0:2] + true_boxes[..., 2:4]) // 2
+    boxes_wh =  true_boxes[..., 2:4] - true_boxes[..., 0:2]
+    print("boxes_xy:",boxes_xy)
+    print("boxes_wh:",boxes_wh)
+
+    #-----------------------------------------------------------#
+    #   将真实框归一化到小数形式
+    #-----------------------------------------------------------#
+    true_boxes[..., 0:2] = boxes_xy / input_shape
+    true_boxes[..., 2:4] = boxes_wh / input_shape
+    print("boxes_xy:",true_boxes)
+    print("boxes_wh:",true_boxes)
+
+    #-----------------------------------------------------------#
+    #   [9,2] -> [9,2]
+    #-----------------------------------------------------------#
+    anchors         = np.array(anchors, np.float32)
+
+    #-----------------------------------------------------------#
+    #   长宽要大于0才有效
+    #-----------------------------------------------------------#
+    valid_mask = boxes_wh[..., 0]>0
+    print(valid_mask)
+
+    for b in range(m):
+        #-----------------------------------------------------------#
+        #   对每一张图进行处理
+        #-----------------------------------------------------------#
+        wh = boxes_wh[b, valid_mask[b]]
+        print("wh;",wh)
+
+        if len(wh) == 0: continue
+        #-------------------------------------------------------#
+        #   wh                      : num_true_box, 2
+        #   anchors                 : 9, 2
+        #
+        #   ratios_of_gt_anchors    : num_true_box, 9, 2
+        #   ratios_of_anchors_gt    : num_true_box, 9, 2
+        #
+        #   ratios                  : num_true_box, 9, 4
+        #   max_ratios              : num_true_box, 9
+        #-------------------------------------------------------#
+
+        ratios_of_gt_anchors = np.expand_dims(wh, 1) / np.expand_dims(anchors, 0)
+        print(ratios_of_gt_anchors)
+        print(np.expand_dims(wh, 1))
+        print(np.expand_dims(anchors, 0))
+
+        ratios_of_anchors_gt = np.expand_dims(anchors, 0) / np.expand_dims(wh, 1)
+        ratios               = np.concatenate([ratios_of_gt_anchors, ratios_of_anchors_gt], axis = -1)
+        max_ratios           = np.max(ratios, axis = -1)
+
+        print("ratios_of_anchors_gt:",ratios_of_anchors_gt)
+        print("ratios_of_gt_anchors:",ratios_of_gt_anchors)
+        print("ratios:",ratios)
+        print("max_ratios:",max_ratios)
+       
+        for t, ratio in enumerate(max_ratios):
+            #-------------------------------------------------------#
+            #   ratio : 9
+            #-------------------------------------------------------#
+            over_threshold = ratio < 4
+            print("over_threshold:",over_threshold)
+
+            over_threshold[np.argmin(ratio)] = True
+            print("over_threshold:",over_threshold) 
+            print("ratio:",ratio)
+            print("np.argmin(ratio):",np.argmin(ratio))
+
+            #-----------------------------------------------------------#
+            #   找到每个真实框所属的特征层
+            #-----------------------------------------------------------#
+            for l in range(num_layers):
+                print("l:",l)
+
+                for k, n in enumerate(anchors_mask[l]):
+                    if not over_threshold[n]:
+                        continue
+                    #-----------------------------------------------------------#
+                    #   floor用于向下取整，找到真实框所属的特征层对应的x、y轴坐标
+                    #-----------------------------------------------------------#
+                    print("true_boxes:",true_boxes)
+                    i = np.floor(true_boxes[b,t,0] * grid_shapes[l]).astype('int32')
+                    print("i:",i)
+                    print("grid_shapes[l][1]:",grid_shapes[l])
+                    print("true_boxes[b,t,0]:",true_boxes[b,t,0])  
+                 
+                    j = np.floor(true_boxes[b,t,1] * grid_shapes[l]).astype('int32')
+                    print("j:",j)
+                    print("grid_shapes[l][1]:",grid_shapes[l])
+                    print("true_boxes[b,t,0]:",true_boxes[b,t,1])  
+
+                    offsets = get_near_points(true_boxes[b,t,0] * grid_shapes[l], true_boxes[b,t,1] * grid_shapes[l], i, j)
+                    print("offsets;",offsets)
+
+                    for offset in offsets:
+                        local_i = i + offset[0]
+                        local_j = j + offset[1]
+                        print("local_i:",local_i)
+                        print("local_j:",local_j)
+                        print("grid_shapes[l]:",grid_shapes[l])
+                        if local_i >= grid_shapes[l] or local_i < 0 or local_j >= grid_shapes[l] or local_j < 0:
+
+                            continue
+
+                        if box_best_ratios[l][b, local_j, local_i, k] != 0:
+
+                            if box_best_ratios[l][b, local_j, local_i, k] > ratio[n]:
+                                y_true[l][b, local_j, local_i, k, :] = 0
+                            else:
+                                continue
+
+                        #-----------------------------------------------------------#
+                        #   c指的是当前这个真实框的种类
+                        #-----------------------------------------------------------#
+                        c = true_boxes[b, t, 4].astype('int32')
+                        #-----------------------------------------------------------#
+                        #   y_true的shape为(m,13,13,3,85)(m,26,26,3,85)(m,52,52,3,85)
+                        #   最后的85可以拆分成4+1+80，4代表的是框的中心与宽高、
+                        #   1代表的是置信度、80代表的是种类
+                        #-----------------------------------------------------------#
+                        y_true[l][b, local_j, local_i, k, 0:4] = true_boxes[b, t, 0:4]
+                        y_true[l][b, local_j, local_i, k, 4] = 1
+                        y_true[l][b, local_j, local_i, k, 5+c] = 1
+                        box_best_ratios[l][b, local_j, local_i, k] = ratio[n]
+
+                        print("y_true;",len(y_true))
+                        print("y_true;",np.shape(y_true[0]))
+                        # print("y_true;",len(y_true[1]))
+                        # exit()
+    return y_true
+line = ["/yolo/compil/yolov5-self/dataset/datamix/images/2024_04_30_11_42_01_656.jpg2024-05-29-01:36:18.991027.jpg", "538,259,556,277,1","195,72,221,86,1"]
+box= np.array([np.array(list(map(int,box.split(',')))) for box in line[1:]])
+
+box_data = np.zeros((10,5))
+box_data[:len(box)] = box
+print(box_data)
+
+input_shape = 480
+anchors = [[10,13],[16,30], [33,23],  [30,61], [62,45], [59,119],  [116,90], [156,198], [373,326]]
+
+preprocess_true_boxes(box_data, input_shape, anchors, 3)
