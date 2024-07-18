@@ -3,10 +3,10 @@ import os
 from functools import partial
 
 import tensorflow as tf
-from keras import backend as K
-from keras.callbacks import (EarlyStopping, LearningRateScheduler,
+import tensorflow.keras.backend as K
+from tensorflow.keras.callbacks import (EarlyStopping, LearningRateScheduler,
                                         TensorBoard)
-from keras.optimizers import SGD, Adam
+from tensorflow.keras.optimizers import SGD, Adam
 
 from nets.yolo import get_train_model, yolo_body
 from nets.yolo_training import get_lr_scheduler
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
     UnFreeze_Epoch      = 1000
-    Unfreeze_batch_size = 64
+    Unfreeze_batch_size = 20
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     #   （二）此处设置评估参数较为保守，目的是加快评估速度。
     #------------------------------------------------------------------#
     eval_flag           = True
-    eval_period         = 2
+    eval_period         = 1
     #------------------------------------------------------------------#
     #   num_workers     用于设置是否使用多线程读取数据，1代表关闭多线程
     #                   开启后会加快数据读取速度，但是会占用更多内存

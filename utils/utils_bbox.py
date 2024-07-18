@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 #---------------------------------------------------#
@@ -77,7 +77,7 @@ def get_anchors_and_decode(feats, anchors, num_classes, input_shape, calc_loss=F
     #------------------------------------------#
     #   对先验框进行解码，并进行归一化
     #------------------------------------------#
-    box_xy          = (K.sigmoid(feats[..., :2]) * 2 - 0.5 + grid) / K.cast([grid_shape[0], grid_shape[1]], K.dtype(feats))
+    box_xy          = (K.sigmoid(feats[..., :2]) * 2 - 0.5 + grid) / K.cast(grid_shape[..., ::-1], K.dtype(feats))
     box_wh          = (K.sigmoid(feats[..., 2:4]) * 2) ** 2 * anchors_tensor / K.cast([480,480], K.dtype(feats))
 
     #------------------------------------------#
@@ -110,8 +110,8 @@ def DecodeBox(outputs,
             max_boxes       = 100,
             confidence      = 0.5,
             nms_iou         = 0.3,
-            convert_model   = False,
-            letterbox_image = True):
+            letterbox_image = True,
+            convert_model = False):
 
     image_shape = K.reshape(outputs[-1],[-1])
     box_xy = []
@@ -129,7 +129,7 @@ def DecodeBox(outputs,
     box_wh          = K.concatenate(box_wh, axis = 0)
     box_confidence  = K.concatenate(box_confidence, axis = 0)
     box_class_probs = K.concatenate(box_class_probs, axis = 0)
-    
+
     if convert_model:
         return box_xy,box_wh,box_confidence,box_class_probs
 
@@ -139,6 +139,7 @@ def DecodeBox(outputs,
     #   如果没有使用letterbox_image也需要将归一化后的box_xy, box_wh调整成相对于原图大小的
     #------------------------------------------------------------------------------------------------------------#
     boxes       = yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
+
     box_scores  = box_confidence * box_class_probs
 
     #-----------------------------------------------------------#
@@ -156,18 +157,18 @@ def DecodeBox(outputs,
         class_boxes      = tf.boolean_mask(boxes, mask[:, c])
         class_box_scores = tf.boolean_mask(box_scores[:, c], mask[:, c])
 
-        # #-----------------------------------------------------------#
-        # #   非极大抑制
-        # #   保留一定区域内得分最大的框
-        # #-----------------------------------------------------------#
-        # nms_index = tf.image.non_max_suppression(class_boxes, class_box_scores, max_boxes_tensor, iou_threshold=nms_iou)
+        #-----------------------------------------------------------#
+        #   非极大抑制
+        #   保留一定区域内得分最大的框
+        #-----------------------------------------------------------#
+        nms_index = tf.image.non_max_suppression(class_boxes, class_box_scores, max_boxes_tensor, iou_threshold=nms_iou)
 
-        # #-----------------------------------------------------------#
-        # #   获取非极大抑制后的结果
-        # #   下列三个分别是：框的位置，得分与种类
-        # #-----------------------------------------------------------#
-        # class_boxes         = K.gather(class_boxes, nms_index)
-        # class_box_scores    = K.gather(class_box_scores, nms_index)
+        #-----------------------------------------------------------#
+        #   获取非极大抑制后的结果
+        #   下列三个分别是：框的位置，得分与种类
+        #-----------------------------------------------------------#
+        class_boxes         = K.gather(class_boxes, nms_index)
+        class_box_scores    = K.gather(class_box_scores, nms_index)
         classes             = K.ones_like(class_box_scores, 'int32') * c
 
         boxes_out.append(class_boxes)

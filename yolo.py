@@ -115,7 +115,6 @@ class YOLO(object):
             inputs  = [*self.model.output]#, self.input_image_shape]
         else:
             inputs  = [*self.model.output, self.input_image_shape]
-        print("here:",self.convert_model)
         outputs = Lambda(
             DecodeBox, 
             output_shape = (1,), 
