@@ -232,7 +232,7 @@ class EvalCallback(keras.callbacks.Callback):
             plt.close("all")
 
             print("Get map done.")
-            # shutil.rmtree(self.map_out_path)
+            shutil.rmtree(self.map_out_path)
 
 class ModelCheckpoint(keras.callbacks.Callback):
     def __init__(self, filepath, monitor='val_loss', verbose=0,

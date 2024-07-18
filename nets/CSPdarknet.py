@@ -96,7 +96,7 @@ def DarknetConv2D_BN_ReLU_dw(*args, **kwargs):
     return compose(
         DarknetConv2D_dw(*args, **no_bias_kwargs),
         BatchNormalization(momentum = 0.97, epsilon = 0.001, name = kwargs['name'] + '.bn'),
-        LeakyReLU())
+        LeakyReLU(0.5))
 def Bottleneck(x, out_channels, shortcut=True, weight_decay=5e-4, name = ""):
     y = compose(
             DarknetConv2D_BN_SiLU(out_channels, (1, 1), weight_decay=weight_decay, name = name + '.cv1'),

@@ -10,6 +10,9 @@ import shutil
 import json
 import math
 import random
+from PIL import Image,ImageDraw
+# from pycocotools.coco import COCO
+# from pycocotools.cocoeval import COCOeval
 os.environ["CUDA_VISIBLE_DEVICES"]  = "1"
 class onnx_model():
     def __init__(self,onnx_model_path,val_path):
@@ -44,7 +47,6 @@ class onnx_model():
                 y2 = int(x+w//2)
                 confid  = output[2][row][0]
                 c1 = output[3][row]
-                print("x:",x1," y:",y1," x2:",x2," y2:", y2,"confid:",confid," c1:",c1)
                 draw.rectangle([y1,x1,y2,x2], outline=(0,0,0))
         image_source.save("./result_onnx.jpg")
 
@@ -140,8 +142,8 @@ class MNN_model():
         self.mnn_model_path = mnn_model_path
         self.val_path = val_path
         self.class_names = ["ladder","leaf","drain"]
-
-
+        # self.get_map(0.5, False, score_threhold=0.4, path = ".temp_map_out")
+        # exit()
         self.interpreter = MNN.Interpreter(self.mnn_model_path)
         config = {}
         config['precision'] = 'high'
@@ -150,7 +152,8 @@ class MNN_model():
         self.session = self.interpreter.createSession(config)
         self.input_tensors = self.interpreter.getSessionInput(self.session)
         self.input_format = (1, self.model_shape[0], self.model_shape[1],3)
-
+        # self.detec_image()
+        # exit()
         self.start_eval(self.val_path)
 
     def start_eval(self,val_path,map_out_path = ".temp_map_out"):
@@ -170,58 +173,63 @@ class MNN_model():
                 image_id    = os.path.basename(line[0]).split('.')[0]
                 image       = Image.open(line[0])
                 gt_boxes    = np.array([np.array(list(map(int,box.split(',')))) for box in line[1:]])
-
                 self.get_map_txt(image_id, image, self.class_names, map_out_path)
+
                 with open(os.path.join(map_out_path, "ground-truth/"+image_id+".txt"), "w") as new_f:
                     for box in gt_boxes:
                         left, top, right, bottom, obj = box
                         obj_name = self.class_names[obj]
-
+                        
                         new_f.write("%s %s %s %s %s\n" % (obj_name, left, top, right, bottom))
-
+                # exit()
             print("Calculate Map.")
-            try:
-                print("coco_map")
-                temp_map = self.get_coco_map(class_names = self.class_names, path = map_out_path)[1]
-            except:
-                temp_map = self.get_map(50, False, path = map_out_path)
-        # shutil.rmtree(map_out_path)
+            # try:
+            # temp_map = self.get_coco_map(class_names = self.class_names, path = map_out_path)[1]
+            # except:
+            #     print("ignore coco")
+            temp_map = self.get_map(0.1, False, path = map_out_path)
+        shutil.rmtree(map_out_path)
     def detec_image(self):
-        import time
-        import MNN
-        import os 
-        import random
-        import numpy as np
-        from PIL import Image,ImageDraw
-        image_source = Image.open("1.jpg")
+
+        datalist = os.listdir("../dataset/datamix/images/")
+        random.shuffle(datalist)
+
+        image_source = Image.open("../dataset/datamix/images/"+datalist[0])
         draw = ImageDraw.Draw(image_source)
-        image  = self.cvtColor(image_source)
+        image  = image_source.convert('RGB')
         image_data  =self.resize_image(image, (480, 480), True)
         image_data  = np.expand_dims(np.array(image_data, dtype='float32')/255., 0)
-        interpreter = MNN.Interpreter(self.mnn_model_path)
-        config = {}
-        config['precision'] = 'high'
-        config['backend'] = 'CPU'
-        config['thread'] = 1
-        session = interpreter.createSession(config)
-        input_tensors = interpreter.getSessionInput(session)
-        input_format = (1, self.model_shape[0], self.model_shape[1],3)
-        tmp_input = MNN.Tensor(input_format, MNN.Halide_Type_Float, image_data, MNN.Tensor_DimensionType_Caffe)
-        input_tensors.copyFrom(tmp_input)
-        interpreter.runSession(session)
-        infer_result = interpreter.getSessionOutputAll(session)
+
+        self.tmp_input = MNN.Tensor(self.input_format, MNN.Halide_Type_Float, image_data, MNN.Tensor_DimensionType_Tensorflow)
+        self.input_tensors.copyFrom(self.tmp_input)
+        self.interpreter.runSession(self.session)
+        infer_result = self.interpreter.getSessionOutputAll(self.session)
         for row in range(infer_result["yolo_eval_2"].getNumpyData().shape[0]):
             if infer_result["yolo_eval_2"].getNumpyData()[row,0]  > 0.5:
                 confid = infer_result["yolo_eval_2"].getNumpyData()[row,0]
-                x = infer_result["yolo_eval"].getNumpyData()[row,1]*480
-                y = infer_result["yolo_eval"].getNumpyData()[row,0]*640
-                w = infer_result["yolo_eval_1"].getNumpyData()[row,1]*480
-                h = infer_result["yolo_eval_1"].getNumpyData()[row,0]*640
-                x1 = x-w//2
-                y1 = y-h//2
-                x2 = x+w//2
-                y2 = y+w//2
+                x = infer_result["yolo_eval"].getNumpyData()[row,0]*640
+                y = infer_result["yolo_eval"].getNumpyData()[row,1]*480
+                w = infer_result["yolo_eval_1"].getNumpyData()[row,0]*640
+                h = infer_result["yolo_eval_1"].getNumpyData()[row,1]*480
+
+                # x1 = x-w//2
+                # y1 = y-h//2
+                # x2 = x+w//2
+                # y2 = y+h//2
+
+                # x = output[0][row][0]*640
+                # y = output[0][row][1]*480
+                # w = output[1][row][0]*640
+                # h = output[1][row][1]*480
+                x1 = int(y-h//2)
+                y1 = int(x-w//2)
+                x2 = int(y+h//2)
+                y2 = int(x+w//2)
+    
+                draw.rectangle([y1,x1,y2,x2], outline=(0,0,0))       
+                # draw.rectangle([x1,y1,x2,y2], outline=(0,255,255))
                 print("confid:",confid,"x1:",int(x1)," y:",int(y1),"x2",int(x2),"y2:",int(y2))
+        image_source.save("result_mnn.jpg")
     def resize_image(self,image, size, letterbox_image):
         from PIL import Image
         import numpy as np
@@ -276,12 +284,11 @@ class MNN_model():
             except:
                 score                   = str(out_scores[i])
             top, left, bottom, right    = out_boxes[i]
+
             if predicted_class not in class_names:
                 continue
-            # print("pre save:",predicted_class, score[:6], str(int(left)), str(int(top)), str(int(right)),str(int(bottom)))
 
-            # exit()
-            f.write("%s %s %s %s %s %s\n" % (predicted_class, score[:6], str(int(left)), str(int(top)), str(int(right)),str(int(bottom))))
+            f.write("%s %s %s %s %s %s\n" % (predicted_class, score[:6], str(int(top)), str(int(left)), str(int(bottom)),str(int(right))))
 
         f.close()
         return  
@@ -297,32 +304,39 @@ class MNN_model():
         out_class = []
         out_boxes = []
         for row in range(infer_result["yolo_eval_2"].getNumpyData().shape[0]):
-            if infer_result["yolo_eval_2"].getNumpyData()[row,0]  > 0.5:
+            if infer_result["yolo_eval_2"].getNumpyData()[row,0]  > 0.2:
                 confid = infer_result["yolo_eval_2"].getNumpyData()[row,0]
-                x = pre_xy.getNumpyData()[row,1]*480
-                y = pre_xy.getNumpyData()[row,0]*640
-                w = pre_wh.getNumpyData()[row,1]*480
-                h = pre_wh.getNumpyData()[row,0]*640
-                x1 = x-w//2
-                y1 = y-h//2
-                x2 = x+w//2
-                y2 = y+w//2
-                out_x1y1.append([x1,y1])
-                out_x2y2.append([x2,y2])
+                x = pre_xy.getNumpyData()[row,0]*640
+                y = pre_xy.getNumpyData()[row,1]*480
+                w = pre_wh.getNumpyData()[row,0]*640
+                h = pre_wh.getNumpyData()[row,1]*480
+                # x1 = x-w//2
+                # y1 = y-h//2
+                # x2 = x+w//2
+                # y2 = y+w//2
+
+                x1 = int(y-h//2)
+                y1 = int(x-w//2)
+                x2 = int(y+h//2)
+                y2 = int(x+w//2)
+    
+                # draw.rectangle([y1,x1,y2,x2], outline=(0,0,0))     
+
+                out_x1y1.append([y1,x1])
+                out_x2y2.append([y2,x2])
 
                 class_score = np.max(pre_classes.getNumpyData()[row],axis = 0)*infer_result["yolo_eval_2"].getNumpyData()[row,0]
                 class_num = np.argmax(np.expand_dims(pre_classes.getNumpyData()[row],axis=1),axis=0)
                 out_score.append(class_score)
                 out_class.append(class_num)
                 
-                # print("class_num:",self.class_names[class_num[0]],"class_score:",class_score,"x1:",int(x1)," y:",int(y1),"x2",int(x2),"y2:",int(y2))
 
         box_x1y1  = np.reshape(np.array(out_x1y1),[-1,2])
         box_x2y2  = np.reshape(np.array(out_x2y2),[-1,2])
 
         out_boxes = np.concatenate((box_x1y1,box_x2y2,np.reshape(np.array(out_score),[-1,1])),axis=1)
 
-        keep = self.nms(out_boxes, 0.4)
+        keep = self.nms(out_boxes, 0.5)
         boxes_final=[]
         score_final=[]
         class_final=[]
@@ -332,6 +346,7 @@ class MNN_model():
             boxes_final.append(out_boxes[keep[i]][0:4])
             score_final.append(out_boxes[keep[i]][4])
             class_final.append(out_class[keep[i]][0])
+
         return boxes_final,score_final,class_final
 
     def nms(self,dets, thresh):
@@ -370,6 +385,93 @@ class MNN_model():
             order = order[left_index + 1]
             
         return keep
+
+    def file_lines_to_list(self,path):
+        # open txt file lines to a list
+        with open(path) as f:
+            content = f.readlines()
+        # remove whitespace characters like `\n` at the end of each line
+        content = [x.strip() for x in content]
+        return content
+    def voc_ap(self,rec, prec):
+        """
+        --- Official matlab code VOC2012---
+        mrec=[0 ; rec ; 1];
+        mpre=[0 ; prec ; 0];
+        for i=numel(mpre)-1:-1:1
+                mpre(i)=max(mpre(i),mpre(i+1));
+        end
+        i=find(mrec(2:end)~=mrec(1:end-1))+1;
+        ap=sum((mrec(i)-mrec(i-1)).*mpre(i));
+        """
+        rec.insert(0, 0.0) # insert 0.0 at begining of list
+        rec.append(1.0) # insert 1.0 at end of list
+        mrec = rec[:]
+        prec.insert(0, 0.0) # insert 0.0 at begining of list
+        prec.append(0.0) # insert 0.0 at end of list
+        mpre = prec[:]
+        """
+        This part makes the precision monotonically decreasing
+            (goes from the end to the beginning)
+            matlab: for i=numel(mpre)-1:-1:1
+                        mpre(i)=max(mpre(i),mpre(i+1));
+        """
+        for i in range(len(mpre)-2, -1, -1):
+            mpre[i] = max(mpre[i], mpre[i+1])
+        """
+        This part creates a list of indexes where the recall changes
+            matlab: i=find(mrec(2:end)~=mrec(1:end-1))+1;
+        """
+        i_list = []
+        for i in range(1, len(mrec)):
+            if mrec[i] != mrec[i-1]:
+                i_list.append(i) # if it was matlab would be i + 1
+        """
+        The Average Precision (AP) is the area under the curve
+            (numerical integration)
+            matlab: ap=sum((mrec(i)-mrec(i-1)).*mpre(i));
+        """
+        ap = 0.0
+        for i in i_list:
+            ap += ((mrec[i]-mrec[i-1])*mpre[i])
+        return ap, mrec, mpre
+    def log_average_miss_rate(self,precision, fp_cumsum, num_images):
+        """
+            log-average miss rate:
+                Calculated by averaging miss rates at 9 evenly spaced FPPI points
+                between 10e-2 and 10e0, in log-space.
+
+            output:
+                    lamr | log-average miss rate
+                    mr | miss rate
+                    fppi | false positives per image
+
+            references:
+                [1] Dollar, Piotr, et al. "Pedestrian Detection: An Evaluation of the
+                State of the Art." Pattern Analysis and Machine Intelligence, IEEE
+                Transactions on 34.4 (2012): 743 - 761.
+        """
+
+        if precision.size == 0:
+            lamr = 0
+            mr = 1
+            fppi = 0
+            return lamr, mr, fppi
+
+        fppi = fp_cumsum / float(num_images)
+        mr = (1 - precision)
+
+        fppi_tmp = np.insert(fppi, 0, -1.0)
+        mr_tmp = np.insert(mr, 0, 1.0)
+
+        ref = np.logspace(-2.0, 0.0, num = 9)
+        for i, ref_i in enumerate(ref):
+            j = np.where(fppi_tmp <= ref_i)[-1][-1]
+            ref[i] = mr_tmp[j]
+
+        lamr = math.exp(np.mean(np.log(np.maximum(1e-10, ref))))
+
+        return lamr, mr, fppi
     def get_map(self,MINOVERLAP, draw_plot, score_threhold=0.4, path = './map_out'):
         GT_PATH             = os.path.join(path, 'ground-truth')
         DR_PATH             = os.path.join(path, 'detection-results')
@@ -494,6 +596,7 @@ class MNN_model():
                 for line in lines:
                     try:
                         tmp_class_name, confidence, left, top, right, bottom = line.split()
+ 
                     except:
                         line_split      = line.split()
                         bottom          = line_split[-1]
@@ -534,6 +637,7 @@ class MNN_model():
                 for idx, detection in enumerate(dr_data):
                     file_id     = detection["file_id"]
                     score[idx]  = float(detection["confidence"])
+ 
                     if score[idx] >= score_threhold:
                         score_threhold_idx = idx
 
@@ -893,93 +997,6 @@ class MNN_model():
                 ""
                 )
         return mAP
-    def file_lines_to_list(self,path):
-        # open txt file lines to a list
-        with open(path) as f:
-            content = f.readlines()
-        # remove whitespace characters like `\n` at the end of each line
-        content = [x.strip() for x in content]
-        return content
-    def voc_ap(self,rec, prec):
-        """
-        --- Official matlab code VOC2012---
-        mrec=[0 ; rec ; 1];
-        mpre=[0 ; prec ; 0];
-        for i=numel(mpre)-1:-1:1
-                mpre(i)=max(mpre(i),mpre(i+1));
-        end
-        i=find(mrec(2:end)~=mrec(1:end-1))+1;
-        ap=sum((mrec(i)-mrec(i-1)).*mpre(i));
-        """
-        rec.insert(0, 0.0) # insert 0.0 at begining of list
-        rec.append(1.0) # insert 1.0 at end of list
-        mrec = rec[:]
-        prec.insert(0, 0.0) # insert 0.0 at begining of list
-        prec.append(0.0) # insert 0.0 at end of list
-        mpre = prec[:]
-        """
-        This part makes the precision monotonically decreasing
-            (goes from the end to the beginning)
-            matlab: for i=numel(mpre)-1:-1:1
-                        mpre(i)=max(mpre(i),mpre(i+1));
-        """
-        for i in range(len(mpre)-2, -1, -1):
-            mpre[i] = max(mpre[i], mpre[i+1])
-        """
-        This part creates a list of indexes where the recall changes
-            matlab: i=find(mrec(2:end)~=mrec(1:end-1))+1;
-        """
-        i_list = []
-        for i in range(1, len(mrec)):
-            if mrec[i] != mrec[i-1]:
-                i_list.append(i) # if it was matlab would be i + 1
-        """
-        The Average Precision (AP) is the area under the curve
-            (numerical integration)
-            matlab: ap=sum((mrec(i)-mrec(i-1)).*mpre(i));
-        """
-        ap = 0.0
-        for i in i_list:
-            ap += ((mrec[i]-mrec[i-1])*mpre[i])
-        return ap, mrec, mpre
-    def log_average_miss_rate(self,precision, fp_cumsum, num_images):
-        """
-            log-average miss rate:
-                Calculated by averaging miss rates at 9 evenly spaced FPPI points
-                between 10e-2 and 10e0, in log-space.
-
-            output:
-                    lamr | log-average miss rate
-                    mr | miss rate
-                    fppi | false positives per image
-
-            references:
-                [1] Dollar, Piotr, et al. "Pedestrian Detection: An Evaluation of the
-                State of the Art." Pattern Analysis and Machine Intelligence, IEEE
-                Transactions on 34.4 (2012): 743 - 761.
-        """
-
-        if precision.size == 0:
-            lamr = 0
-            mr = 1
-            fppi = 0
-            return lamr, mr, fppi
-
-        fppi = fp_cumsum / float(num_images)
-        mr = (1 - precision)
-
-        fppi_tmp = np.insert(fppi, 0, -1.0)
-        mr_tmp = np.insert(mr, 0, 1.0)
-
-        ref = np.logspace(-2.0, 0.0, num = 9)
-        for i, ref_i in enumerate(ref):
-            j = np.where(fppi_tmp <= ref_i)[-1][-1]
-            ref[i] = mr_tmp[j]
-
-        lamr = math.exp(np.mean(np.log(np.maximum(1e-10, ref))))
-
-        return lamr, mr, fppi
-
     def get_coco_map(self,class_names, path):
         GT_PATH     = os.path.join(path, 'ground-truth')
         DR_PATH     = os.path.join(path, 'detection-results')
@@ -992,11 +1009,11 @@ class MNN_model():
         DR_JSON_PATH = os.path.join(COCO_PATH, 'instances_dr.json')
 
         with open(GT_JSON_PATH, "w") as f:
-            results_gt  = preprocess_gt(GT_PATH, class_names)
+            results_gt  = self.preprocess_gt(GT_PATH, class_names)
             json.dump(results_gt, f, indent=4)
 
         with open(DR_JSON_PATH, "w") as f:
-            results_dr  = preprocess_dr(DR_PATH, class_names)
+            results_dr  = self.preprocess_dr(DR_PATH, class_names)
             json.dump(results_dr, f, indent=4)
             if len(results_dr) == 0:
                 print("未检测到任何目标。")
@@ -1010,6 +1027,99 @@ class MNN_model():
         cocoEval.summarize()
 
         return cocoEval.stats
+    def preprocess_gt(self,gt_path, class_names):
+        image_ids   = os.listdir(gt_path)
+        results = {}
+
+        images = []
+        bboxes = []
+        for i, image_id in enumerate(image_ids):
+            lines_list      = self.file_lines_to_list(os.path.join(gt_path, image_id))
+            boxes_per_image = []
+            image           = {}
+            image_id        = os.path.splitext(image_id)[0]
+            image['file_name'] = image_id + '.jpg'
+            image['width']     = 1
+            image['height']    = 1
+            #-----------------------------------------------------------------#
+            #   感谢 多学学英语吧 的提醒
+            #   解决了'Results do not correspond to current coco set'问题
+            #-----------------------------------------------------------------#
+            image['id']        = str(image_id)
+
+            for line in lines_list:
+                difficult = 0 
+                if "difficult" in line:
+                    line_split  = line.split()
+                    left, top, right, bottom, _difficult = line_split[-5:]
+                    class_name  = ""
+                    for name in line_split[:-5]:
+                        class_name += name + " "
+                    class_name  = class_name[:-1]
+                    difficult = 1
+                else:
+                    line_split  = line.split()
+                    left, top, right, bottom = line_split[-4:]
+                    class_name  = ""
+                    for name in line_split[:-4]:
+                        class_name += name + " "
+                    class_name = class_name[:-1]
+                
+                left, top, right, bottom = float(left), float(top), float(right), float(bottom)
+                if class_name not in class_names:
+                    continue
+                cls_id  = class_names.index(class_name) + 1
+                bbox    = [left, top, right - left, bottom - top, difficult, str(image_id), cls_id, (right - left) * (bottom - top) - 10.0]
+                boxes_per_image.append(bbox)
+            images.append(image)
+            bboxes.extend(boxes_per_image)
+        results['images']        = images
+
+        categories = []
+        for i, cls in enumerate(class_names):
+            category = {}
+            category['supercategory']   = cls
+            category['name']            = cls
+            category['id']              = i + 1
+            categories.append(category)
+        results['categories']   = categories
+
+        annotations = []
+        for i, box in enumerate(bboxes):
+            annotation = {}
+            annotation['area']        = box[-1]
+            annotation['category_id'] = box[-2]
+            annotation['image_id']    = box[-3]
+            annotation['iscrowd']     = box[-4]
+            annotation['bbox']        = box[:4]
+            annotation['id']          = i
+            annotations.append(annotation)
+        results['annotations'] = annotations
+        return results
+
+    def preprocess_dr(self,dr_path, class_names):
+        image_ids = os.listdir(dr_path)
+        results = []
+        for image_id in image_ids:
+            lines_list      = self.file_lines_to_list(os.path.join(dr_path, image_id))
+            image_id        = os.path.splitext(image_id)[0]
+            for line in lines_list:
+                line_split  = line.split()
+                confidence, left, top, right, bottom = line_split[-5:]
+                class_name  = ""
+                for name in line_split[:-5]:
+                    class_name += name + " "
+                class_name  = class_name[:-1]
+                left, top, right, bottom = float(left), float(top), float(right), float(bottom)
+                result                  = {}
+                result["image_id"]      = str(image_id)
+                if class_name not in class_names:
+                    continue
+                result["category_id"]   = class_names.index(class_name) + 1
+                result["bbox"]          = [left, top, right - left, bottom - top]
+                result["score"]         = float(confidence)
+                results.append(result)
+        return results
 image_path = "../dataset/datamix/images/"
 h5_model_path = "./logs/ep030-loss0.989-val_loss0.994.h5"
 
