@@ -59,7 +59,7 @@ class YOLO(object):
         #   在多次测试后，发现关闭letterbox_image直接resize的效果更好
         #---------------------------------------------------------------------#
         "letterbox_image"   : True,
-        "convert_model"     : False,
+        "convert_model"     : True,
     }
 
     @classmethod
@@ -77,7 +77,8 @@ class YOLO(object):
         for name, value in kwargs.items():
             setattr(self, name, value)
             self._defaults[name] = value 
-            
+
+
         #---------------------------------------------------#
         #   获得种类和先验框的数量
         #---------------------------------------------------#
@@ -94,8 +95,7 @@ class YOLO(object):
         self.generate()
 
         show_config(**self._defaults)
-        # print(self.conver_model)
-        # exit()
+
     #---------------------------------------------------#
     #   载入模型
     #---------------------------------------------------#
@@ -103,37 +103,32 @@ class YOLO(object):
         model_path = os.path.expanduser(self.model_path)
         assert model_path.endswith('.h5'), 'Keras model or weights must be a .h5 file.'
         
-        self.model = yolo_body([480, 480, 3], self.anchors_mask, self.num_classes, self.phi)
+        self.model = yolo_body([480, 480, 3], self.anchors_mask, self.num_classes, self.phi,convert_model = self.convert_model,anchors = self.anchors)
         self.model.load_weights(self.model_path)
+
         print('{} model, anchors, and classes loaded.'.format(model_path))
-        #---------------------------------------------------------#
-        #   在DecodeBox函数中，我们会对预测结果进行后处理
-        #   后处理的内容包括，解码、非极大抑制、门限筛选等
-        #---------------------------------------------------------#
-        self.input_image_shape = Input([2,],batch_size=1)
-        if self.convert_model:
-            inputs  = [*self.model.output]#, self.input_image_shape]
-        else:
+        if not self.convert_model:
+            #---------------------------------------------------------#
+            #   在DecodeBox函数中，我们会对预测结果进行后处理
+            #   后处理的内容包括，解码、非极大抑制、门限筛选等
+            #---------------------------------------------------------#
+            self.input_image_shape = Input([2,],batch_size=1)
             inputs  = [*self.model.output, self.input_image_shape]
-        outputs = Lambda(
-            DecodeBox, 
-            output_shape = (1,), 
-            name = 'yolo_eval',
-            arguments = {
-                'anchors'           : self.anchors, 
-                'num_classes'       : self.num_classes, 
-                'input_shape'       : self.input_shape, 
-                'anchor_mask'       : self.anchors_mask,
-                'confidence'        : self.confidence, 
-                'nms_iou'           : self.nms_iou, 
-                'max_boxes'         : self.max_boxes, 
-                'letterbox_image'   : self.letterbox_image,
-                'convert_model'     : self.convert_model
-             }
-        )(inputs)
-        if self.convert_model:
-            self.yolo_model = Model(self.model.input,outputs)#, ], outputs)
-        else: 
+            outputs = Lambda(
+                DecodeBox, 
+                output_shape = (1,), 
+                name = 'yolo_eval',
+                arguments = {
+                    'anchors'           : self.anchors, 
+                    'num_classes'       : self.num_classes, 
+                    'input_shape'       : self.input_shape, 
+                    'anchor_mask'       : self.anchors_mask,
+                    'confidence'        : self.confidence, 
+                    'nms_iou'           : self.nms_iou, 
+                    'max_boxes'         : self.max_boxes, 
+                    'letterbox_image'   : self.letterbox_image
+                }
+            )(inputs)
             self.yolo_model = Model([self.model.input,self.input_image_shape],outputs)#, ], outputs)
 
     @tf.function
@@ -317,7 +312,7 @@ class YOLO(object):
         import tf2onnx
         input_image_shape = np.expand_dims(np.array([480, 480], dtype='float32'), 0)
         spec = [tf.TensorSpec((None, 480,480, 3), tf.float32, name="input")]
-        tf2onnx.convert.from_keras(self.yolo_model, input_signature=spec, opset=13, output_path=model_path)
+        tf2onnx.convert.from_keras(self.model, input_signature=spec, opset=13, output_path=model_path)
 
         # Checks
         model_onnx = onnx.load(model_path)  # load onnx model
@@ -562,20 +557,23 @@ class YOLO_ONNX(object):
         input_feed  = self.get_input_feed(image_data)
         outputs     = self.onnx_session.run(output_names=self.output_name, input_feed=input_feed)
 
-        feature_map_shape   = [[int(j / (2 ** (i + 3))) for j in self.input_shape] for i in range(len(self.anchors_mask))][::-1]
-        for i in range(len(self.anchors_mask)):
-            outputs[i] = np.transpose(np.reshape(outputs[i], (1, feature_map_shape[i][0], feature_map_shape[i][1], len(self.anchors_mask[i]) * (5 + self.num_classes))), (0, 3, 1, 2))
-        
-        outputs = self.bbox_util.decode_box(outputs)
+
+        # feature_map_shape   = [[int(j / (2 ** (i + 3))) for j in self.input_shape] for i in range(len(self.anchors_mask))][::-1]
+        # for i in range(len(self.anchors_mask)):
+        #     outputs[i] = np.transpose(np.reshape(outputs[i], (1, feature_map_shape[i][0], feature_map_shape[i][1], len(self.anchors_mask[i]) * (5 + self.num_classes))), (0, 3, 1, 2))
+        # print(np.shape(outputs[0]))
+        # outputs = self.bbox_util.decode_box(outputs)
         #---------------------------------------------------------#
         #   将预测框进行堆叠，然后进行非极大抑制
         #---------------------------------------------------------#
         results = self.bbox_util.non_max_suppression(np.concatenate(outputs, 1), self.num_classes, self.input_shape, 
                     image_shape, self.letterbox_image, conf_thres = self.confidence, nms_thres = self.nms_iou)
-                                                
+        print(results) 
+        exit()    
+# b'leaf 0.67' 365 93 387 144
+# b'leaf 0.65' 379 0 402 41                                   
         if results[0] is None: 
             return image
-
         top_label   = np.array(results[0][:, 6], dtype = 'int32')
         top_conf    = results[0][:, 4] * results[0][:, 5]
         top_boxes   = results[0][:, :4]
@@ -603,12 +601,12 @@ class YOLO_ONNX(object):
 
             label = '{} {:.2f}'.format(predicted_class, score)
             draw = ImageDraw.Draw(image)
-            label_size = draw.textsize(label, font)
+            label_size = draw.textlength(label, font)
             label = label.encode('utf-8')
             print(label, top, left, bottom, right)
             
-            if top - label_size[1] >= 0:
-                text_origin = np.array([left, top - label_size[1]])
+            if top - label_size >= 0:
+                text_origin = np.array([left, top - label_size])
             else:
                 text_origin = np.array([left, top + 1])
 

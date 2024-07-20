@@ -21,13 +21,13 @@ convert = 'onnx'
 if convert == "tflite":
     from yolo import YOLO
     yolo = YOLO()
-    yolo.generate()
+    # yolo.generate()
     yolo.conver_to_tflite("./best_epoch_weights.tflite")
 
 if convert == "onnx":
     from yolo import YOLO
-    yolo = YOLO(convert_model=True)
-    yolo.generate()
+    yolo = YOLO()
+    # yolo.generate()
     yolo.convert_to_onnx(True,"./best_epoch_weights.onnx")
 if convert == "pb":
     from yolo import YOLO

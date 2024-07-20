@@ -26,7 +26,7 @@ if __name__ == "__main__":
     #   'export_onnx'       表示将模型导出为onnx，需要pytorch1.7.1以上。
     #   'predict_onnx'      表示利用导出的onnx模型进行预测，相关参数的修改在yolo.py_377行左右处的YOLO_ONNX
     #----------------------------------------------------------------------------------------------------------#
-    mode = "predict"
+    mode = "predict_onnx"
     #-------------------------------------------------------------------------#
     #   crop                指定了是否在单张图片预测后对目标进行截取
     #   count               指定了是否进行目标的计数
@@ -195,7 +195,6 @@ if __name__ == "__main__":
                 print('Open Error! Try again!')
                 continue
             else:
-                print(1111)
                 r_image = yolo.detect_image(image)
                 r_image.save("result.jpg")
 

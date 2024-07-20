@@ -1,15 +1,15 @@
 from functools import wraps
 
 import tensorflow as tf
-from keras import backend as K
-from keras.initializers import RandomNormal
-from keras.layers import (Add, BatchNormalization, Concatenate,
+from tensorflow.keras import backend as K
+from tensorflow.keras.initializers import RandomNormal
+from tensorflow.keras.layers import (Add, BatchNormalization, Concatenate,
                                      Conv2D, Layer, MaxPooling2D,
                                      ZeroPadding2D,SeparableConv2D)
-from keras.regularizers import L2
+from tensorflow.keras.regularizers import l2
 from utils.utils import compose
 
-from keras.layers import LeakyReLU
+from tensorflow.keras.layers import LeakyReLU
 
 class SiLU(Layer):
     def __init__(self, **kwargs):
@@ -48,7 +48,7 @@ class Focus(Layer):
 #------------------------------------------------------#
 @wraps(Conv2D)
 def DarknetConv2D(*args, **kwargs):
-    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : L2(kwargs.get('weight_decay', 5e-4))}
+    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : l2(kwargs.get('weight_decay', 5e-4))}
     darknet_conv_kwargs['padding'] = 'valid' if kwargs.get('strides')==(2, 2) else 'same'   
     try:
         del kwargs['weight_decay']
@@ -58,7 +58,7 @@ def DarknetConv2D(*args, **kwargs):
     return Conv2D(*args, **darknet_conv_kwargs)
 @wraps(SeparableConv2D)   
 def DarknetConv2D_dw(*args, **kwargs):
-    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : L2(kwargs.get('weight_decay', 5e-4))}
+    darknet_conv_kwargs = {'kernel_initializer' : RandomNormal(stddev=0.02), 'kernel_regularizer' : l2(kwargs.get('weight_decay', 5e-4))}
     darknet_conv_kwargs['padding'] = 'valid' if kwargs.get('strides')==(2, 2) else 'same'   
     try:
         del kwargs['weight_decay']
@@ -96,7 +96,7 @@ def DarknetConv2D_BN_ReLU_dw(*args, **kwargs):
     return compose(
         DarknetConv2D_dw(*args, **no_bias_kwargs),
         BatchNormalization(momentum = 0.97, epsilon = 0.001, name = kwargs['name'] + '.bn'),
-        LeakyReLU(0.5))
+        LeakyReLU())
 def Bottleneck(x, out_channels, shortcut=True, weight_decay=5e-4, name = ""):
     y = compose(
             DarknetConv2D_BN_SiLU(out_channels, (1, 1), weight_decay=weight_decay, name = name + '.cv1'),

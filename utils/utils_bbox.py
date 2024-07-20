@@ -12,6 +12,7 @@ def yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image
     #-----------------------------------------------------------------#
     box_yx = box_xy[..., ::-1]
     box_hw = box_wh[..., ::-1]
+
     input_shape = K.cast(input_shape, K.dtype(box_yx))
     image_shape = K.cast(image_shape, K.dtype(box_yx))
 
@@ -110,8 +111,7 @@ def DecodeBox(outputs,
             max_boxes       = 100,
             confidence      = 0.5,
             nms_iou         = 0.3,
-            letterbox_image = True,
-            convert_model = False):
+            letterbox_image = True):
 
     image_shape = K.reshape(outputs[-1],[-1])
     box_xy = []
@@ -129,9 +129,6 @@ def DecodeBox(outputs,
     box_wh          = K.concatenate(box_wh, axis = 0)
     box_confidence  = K.concatenate(box_confidence, axis = 0)
     box_class_probs = K.concatenate(box_class_probs, axis = 0)
-
-    if convert_model:
-        return box_xy,box_wh,box_confidence,box_class_probs
 
     #------------------------------------------------------------------------------------------------------------#
     #   在图像传入网络预测前会进行letterbox_image给图像周围添加灰条，因此生成的box_xy, box_wh是相对于有灰条的图像的
@@ -242,11 +239,8 @@ class DecodeBoxNP():
             #   生成网格，先验框中心，网格左上角 
             #   batch_size,3,20,20
             #----------------------------------------------------------#
-            grid_x = np.repeat(np.expand_dims(np.repeat(np.expand_dims(np.linspace(0, input_width - 1, input_width), 0), input_height, axis=0), 0), batch_size * len(self.anchors_mask[i]), axis=0)
-            grid_x = np.reshape(grid_x, np.shape(x))
-            grid_y = np.repeat(np.expand_dims(np.repeat(np.expand_dims(np.linspace(0, input_height - 1, input_height), 0), input_width, axis=0).T, 0), batch_size * len(self.anchors_mask[i]), axis=0)
-            grid_y = np.reshape(grid_y, np.shape(y))
-    
+
+
             #----------------------------------------------------------#
             #   按照网格格式生成先验框的宽高
             #   batch_size,3,20,20
@@ -313,6 +307,7 @@ class DecodeBoxNP():
         #-----------------------------------------------------------------#
         box_yx = box_xy[..., ::-1]
         box_hw = box_wh[..., ::-1]
+
         input_shape = np.array(input_shape)
         image_shape = np.array(image_shape)
 
@@ -321,15 +316,18 @@ class DecodeBoxNP():
             #   这里求出来的offset是图像有效区域相对于图像左上角的偏移情况
             #   new_shape指的是宽高缩放情况
             #-----------------------------------------------------------------#
+            print("image_shape:",image_shape)
+            print("input_shape:",input_shape)
             new_shape = np.round(image_shape * np.min(input_shape/image_shape))
             offset  = (input_shape - new_shape)/2./input_shape
+
             scale   = input_shape/new_shape
 
             box_yx  = (box_yx - offset) * scale
             box_hw *= scale
-
         box_mins    = box_yx - (box_hw / 2.)
         box_maxes   = box_yx + (box_hw / 2.)
+        print("box_mins:",box_mins,box_maxes)
         boxes  = np.concatenate([box_mins[..., 0:1], box_mins[..., 1:2], box_maxes[..., 0:1], box_maxes[..., 1:2]], axis=-1)
         boxes *= np.concatenate([image_shape, image_shape], axis=-1)
         return boxes
@@ -403,11 +401,13 @@ class DecodeBoxNP():
                 
                 # Add max detections to outputs
                 output[i] = max_detections if output[i] is None else np.concatenate((output[i], max_detections))
-            
+
             if output[i] is not None:
                 output[i]           = output[i]
                 box_xy, box_wh      = (output[i][:, 0:2] + output[i][:, 2:4])/2, output[i][:, 2:4] - output[i][:, 0:2]
+
                 output[i][:, :4]    = self.yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
+
         return output
 
 
