@@ -940,13 +940,12 @@ class MNN_model():
                         obj_name = self.class_names[obj]
                         
                         new_f.write("%s %s %s %s %s\n" % (obj_name, left, top, right, bottom))
-                # exit()
             print("Calculate Map.")
             try:
                 temp_map = self.get_coco_map(class_names = self.class_names, path = map_out_path)[1]
             except:
                 print("ignore coco")
-                temp_map = self.get_map(0.1, False, path = map_out_path)
+                temp_map = self.get_map(0.5, False, path = map_out_path)
         shutil.rmtree(map_out_path)
     def detec_image(self):
 
@@ -1025,7 +1024,7 @@ class MNN_model():
         #   将图像输入网络当中进行预测！
         #---------------------------------------------------------#
         input_image_shape   = np.expand_dims(np.array([image.size[1], image.size[0]], dtype='float32'), 0)
-        out_boxes, out_scores, out_classes  = self.get_pred(image_data) 
+        out_boxes, out_scores, out_classes  = self.get_pred(image_data,image) 
 
         for i, c in enumerate(out_classes):
             predicted_class             = self.class_names[int(c)]
@@ -1040,12 +1039,20 @@ class MNN_model():
             f.write("%s %s %s %s %s %s\n" % (predicted_class, score[:6], str(int(top)), str(int(left)), str(int(bottom)),str(int(right))))
         f.close()
         return  
-    def get_pred(self,image):
+    def get_pred(self,image,image_source):
         self.tmp_input = MNN.Tensor(self.input_format, MNN.Halide_Type_Float, image, MNN.Tensor_DimensionType_Caffe)
         self.input_tensors.copyFrom(self.tmp_input)
         self.interpreter.runSession(self.session)
+        outputlist = ["tf.concat_2","tf.concat_5","tf.concat_8"]
         infer_result = self.interpreter.getSessionOutputAll(self.session)
-        results = self.non_max_suppression(np.concatenate(infer_result, 1), 3, [480,480], [480,640], False, conf_thres=0.1, nms_thres=0.3)
+        outputs = []
+
+        for i in outputlist:
+            outputs.append(infer_result[i].getNumpyData())
+        # print(np.shape())
+        # exit()       
+
+        results = self.non_max_suppression(np.concatenate(outputs, 1), 3, [480,480], [480,640], False, conf_thres=0.1, nms_thres=0.3)
         top_label   = np.array(results[0][:, 6], dtype = 'int32')
         top_conf    = results[0][:, 4] * results[0][:, 5]
         top_boxes   = results[0][:, :4]
@@ -1066,43 +1073,6 @@ class MNN_model():
                 draw.rectangle([left,top,right,bottom], outline=(0,255,0))     
                 image_source.save("./result.jpg")
         return top_boxes,top_conf,top_label
-
-    def nms(self,dets, thresh):
-        """Pure Python NMS baseline."""
-        # x1、y1、x2、y2、以及score赋值
-        x1 = dets[:, 0]  # xmin
-        y1 = dets[:, 1]  # ymin
-        x2 = dets[:, 2]  # xmax
-        y2 = dets[:, 3]  # ymax
-        scores = dets[:, 4]
-        areas = (x2 - x1 + 1) * (y2 - y1 + 1)
-        # argsort()返回数组值从小到大的索引值
-        order = scores.argsort()[::-1]    
-        keep = []
-        while order.size > 0:  # 还有数据
-            i = order[0]
-            keep.append(i)
-            if order.size==1:break
-            # 计算当前概率最大矩形框与其他矩形框的相交框的坐标
-            xx1 = np.maximum(x1[i], x1[order[1:]])
-            yy1 = np.maximum(y1[i], y1[order[1:]])
-            xx2 = np.minimum(x2[i], x2[order[1:]])
-            yy2 = np.minimum(y2[i], y2[order[1:]])
-
-            # 计算相交框的面积
-            w = np.maximum(0.0, xx2 - xx1 + 1)
-            h = np.maximum(0.0, yy2 - yy1 + 1)
-            inter = w * h
-            # 计算重叠度IOU：重叠面积/（面积1+面积2-重叠面积）
-            IOU = inter / (areas[i] + areas[order[1:]] - inter)
-        
-            # 找到重叠度不高于阈值的矩形框索引
-            left_index = (np.where(IOU <= thresh))[0]
-            
-            # 将order序列更新，由于前面得到的矩形框索引要比矩形框在原order序列中的索引小1，所以要把这个1加回来
-            order = order[left_index + 1]
-            
-        return keep
 
     def file_lines_to_list(self,path):
         # open txt file lines to a list
@@ -1794,7 +1764,63 @@ class MNN_model():
                 output[i][:, :4]    = self.yolo_correct_boxes(box_xy, box_wh, input_shape, image_shape, letterbox_image)
 
         return output
+    def yolo_correct_boxes(self,box_xy, box_wh, input_shape, image_shape, letterbox_image):
+       #-----------------------------------------------------------------#
+        #   把y轴放前面是因为方便预测框和图像的宽高进行相乘
+        #-----------------------------------------------------------------#
+        box_yx = box_xy[..., ::-1]
+        box_hw = box_wh[..., ::-1]
+        input_shape = np.array(input_shape)
+        image_shape = np.array(image_shape)
 
+
+        if True:
+            #-----------------------------------------------------------------#
+            #   这里求出来的offset是图像有效区域相对于图像左上角的偏移情况
+            #   new_shape指的是宽高缩放情况
+            #-----------------------------------------------------------------#
+
+            new_shape = np.round(image_shape * np.min(input_shape/image_shape))
+            offset  = (input_shape - new_shape)/2./input_shape
+
+            scale   = input_shape/new_shape
+
+            box_yx  = (box_yx - offset) * scale
+            box_hw *= scale
+
+
+        box_mins    = box_yx - (box_hw / 2.)
+        box_maxes   = box_yx + (box_hw / 2.)
+        boxes  = np.concatenate([box_mins[..., 0:1], box_mins[..., 1:2], box_maxes[..., 0:1], box_maxes[..., 1:2]], axis=-1)
+        boxes *= np.concatenate([image_shape, image_shape], axis=-1)
+        return boxes
+    def bbox_iou(self, box1, box2, x1y1x2y2=True):
+        """
+            计算IOU
+        """
+        if not x1y1x2y2:
+            b1_x1, b1_x2 = box1[:, 0] - box1[:, 2] / 2, box1[:, 0] + box1[:, 2] / 2
+            b1_y1, b1_y2 = box1[:, 1] - box1[:, 3] / 2, box1[:, 1] + box1[:, 3] / 2
+            b2_x1, b2_x2 = box2[:, 0] - box2[:, 2] / 2, box2[:, 0] + box2[:, 2] / 2
+            b2_y1, b2_y2 = box2[:, 1] - box2[:, 3] / 2, box2[:, 1] + box2[:, 3] / 2
+        else:
+            b1_x1, b1_y1, b1_x2, b1_y2 = box1[:, 0], box1[:, 1], box1[:, 2], box1[:, 3]
+            b2_x1, b2_y1, b2_x2, b2_y2 = box2[:, 0], box2[:, 1], box2[:, 2], box2[:, 3]
+
+        inter_rect_x1 = np.maximum(b1_x1, b2_x1)
+        inter_rect_y1 = np.maximum(b1_y1, b2_y1)
+        inter_rect_x2 = np.minimum(b1_x2, b2_x2)
+        inter_rect_y2 = np.minimum(b1_y2, b2_y2)
+
+        inter_area = np.maximum(inter_rect_x2 - inter_rect_x1, 0) * \
+                    np.maximum(inter_rect_y2 - inter_rect_y1, 0)
+                    
+        b1_area = (b1_x2 - b1_x1) * (b1_y2 - b1_y1)
+        b2_area = (b2_x2 - b2_x1) * (b2_y2 - b2_y1)
+        
+        iou = inter_area / np.maximum(b1_area + b2_area - inter_area, 1e-6)
+
+        return iou
 
 image_path = "../dataset/datamix/images/"
 
@@ -1802,7 +1828,6 @@ output_name_list = [ "yolo_eval","yolo_eval_1", "yolo_eval_2","yolo_eval_3" ]
 mnn_model_path = './best_epoch_weights.mnn'
 val_path = "../dataset/datamix_test.txt"
 onnx_model_path = './best_epoch_weights.onnx'
-# mnn  = MNN_model(image_path,val_path,mnn_model_path,output_name_list)
-onnx_model(image_path,val_path,onnx_model_path)
-onnx_model_path = "./best_epoch_weights.onnx"
-# onnx_model(onnx_model_path)
+mnn  = MNN_model(image_path,val_path,mnn_model_path,output_name_list)
+# onnx_model(image_path,val_path,onnx_model_path)
+# onnx_model_path = "./best_epoch_weights.onnx"

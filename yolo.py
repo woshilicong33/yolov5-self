@@ -557,7 +557,6 @@ class YOLO_ONNX(object):
         input_feed  = self.get_input_feed(image_data)
         outputs     = self.onnx_session.run(output_names=self.output_name, input_feed=input_feed)
 
-
         # feature_map_shape   = [[int(j / (2 ** (i + 3))) for j in self.input_shape] for i in range(len(self.anchors_mask))][::-1]
         # for i in range(len(self.anchors_mask)):
         #     outputs[i] = np.transpose(np.reshape(outputs[i], (1, feature_map_shape[i][0], feature_map_shape[i][1], len(self.anchors_mask[i]) * (5 + self.num_classes))), (0, 3, 1, 2))
@@ -568,8 +567,7 @@ class YOLO_ONNX(object):
         #---------------------------------------------------------#
         results = self.bbox_util.non_max_suppression(np.concatenate(outputs, 1), self.num_classes, self.input_shape, 
                     image_shape, self.letterbox_image, conf_thres = self.confidence, nms_thres = self.nms_iou)
-        print(results) 
-        exit()    
+ 
 # b'leaf 0.67' 365 93 387 144
 # b'leaf 0.65' 379 0 402 41                                   
         if results[0] is None: 
